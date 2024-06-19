@@ -1,0 +1,63 @@
+Step-by-Step Guide on how to send Windows Logs to google SecOps SIEM solution
+
+First, Set up Windows Event Forwarding:
+To transmit logs to a central log collector, turn on Windows Event Forwarding on your Windows computer. Creating a subscription on the Windows computer and designating the log collector as the destination will allow you to accomplish this.
+
+Second, Set up a Log Collector and Install It:
+Install on a Linux computer a log collector such as Google's BindPlane. Set up the log collector to transmit logs to the Google SecOps SIEM after receiving them from the Windows computer.
+
+Set Up BindPlane to Send Logs to Google SecOps SIEM:
+Change the config.yaml file to set BindPlane up to transmit logs to Google SecOps SIEM. The Google SecOps SIEM endpoint and authentication information must be specified.
+
+config.yaml - output:
+  google_secops_siem:
+    endpoint: "https://your-siem-endpoint.com"
+    auth:
+      username: "your-username"
+      password: "your-password"
+
+Interpret and Modify Records:
+To parse and convert the Windows logs into a format that is compatible with Google SecOps SIEM, use a log parsing and transformation tool such as Logstash.
+
+input {
+  tcp {
+    host => "your-log-collector-ip"
+    port => 514
+  }
+}
+
+filter {
+  # Parse Windows logs
+  grok {
+    match => {
+      "message" => [
+        "%{NUMBER:when}\\s+\\d+\\s%{SYSLOGHOST:srcip} %{WORD:action}\\/%{NUMBER:returnCode} %{NUMBER:size} %{WORD:method} (?P<url>\\S+) (?P<username>.*?) %{WORD}\\/(?P<tgtip>\\S+).*"
+      ]
+    }
+    overwrite => ["when","srcip","action","returnCode","size","method","url","username","tgtip"]
+    on_error => "not_valid_log"
+  }
+
+  # Transform and save logs
+  mutate {
+    rename => {
+      "when" => "timestamp"
+      "url" => "event.idm.read_only_udm.target.url"
+      "returnCode" => "event.idm.read_only_udm.network.http.response_code"
+      "size" => "event.idm.read_only_udm.network.received_bytes"
+    }
+  }
+}
+
+output {
+  google_secops_siem {
+    endpoint => "https://your-siem-endpoint.com"
+    auth => {
+      username => "your-username"
+      password => "your-password"
+    }
+  }
+}
+
+Finally, Execute and Verify:
+Install the Logstash settings and verify that Windows logs are properly transported to Google SecOps SIEM by running a log forwarding test.
